@@ -1,3 +1,7 @@
 *.key
 *.crt
 *.csr
+*.p12
+
+.env
+*.vscode
