@@ -1,10 +1,19 @@
 package com.example;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.security.KeyStore;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+
+import java.net.InetSocketAddress;
+
+import com.sun.net.httpserver.HttpsServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsParameters;
 
 import io.github.cdimascio.dotenv.Dotenv;
 
@@ -63,5 +72,49 @@ public class ServerInitializer {
         sslContext.init(kmf.getKeyManagers(), null, null);
 
         return sslContext;
+    }
+
+    /**
+     * Creates an HTTPS server bound to the given port and configured with the provided SSLContext.
+     * 
+     * @param sslContext the initialized {@link javax.net.ssl.SSLContext} instance containing the server's
+     * SSL/TLS configuration which includes the key managers to be used for encrypted communication.
+     * 
+     * @param port the TCP port number on which the HTTPS server will listen for incoming connections. A
+     * value of {@code 0} will assign an automatically available port.
+     * 
+     * @param backlog the maximum number of incoming connection requests that can be queued by the operating
+     * system before being accepted by the server. If the queue is full, new incoming connections may be refused.
+     */
+    public static HttpsServer createConfiguredHttpsServer(SSLContext sslContext, int port, int backlog) throws IOException {
+        HttpsServer server = HttpsServer.create(new InetSocketAddress(port), backlog);
+
+        server.setHttpsConfigurator(new HttpsConfigurator(sslContext) {
+            @Override
+            public void configure(HttpsParameters params) {
+                try {
+                    // Use the SSLContext to obtain default parameters and an engine.
+                SSLContext ctx = getSSLContext();
+                SSLEngine engine = ctx.createSSLEngine();
+                engine.setUseClientMode(false);
+
+                // Disable the need for clients to have certs.
+                SSLParameters sslParams = ctx.getDefaultSSLParameters();
+                sslParams.setNeedClientAuth(false)
+                ;
+                // Use engine defaults for cipher suites and protocols.
+                sslParams.setCipherSuites(engine.getEnabledCipherSuites());
+                sslParams.setProtocols(engine.getEnabledProtocols());
+
+                // Apply our custom protocols to the server
+                params.setSSLParameters(sslParams);
+                } catch(Exception e) {
+                    // Fail fast if configuration cannot be applied
+                    throw new RuntimeException("Failed to configure HTTPS parameters", e);
+                }
+            } 
+        });
+
+        return server;
     }
 }
