@@ -9,7 +9,7 @@ public class App {
     public static void main(String[] args) throws Exception {
         ServerInitializer initializer = new ServerInitializer();
         SSLContext sslContext = initializer.createSSLContext();
-        HttpsServer server = initializer.createConfiguredHttpsServer(sslContext, 8443, 0);
+        HttpsServer server = ServerInitializer.createConfiguredHttpsServer(sslContext, 8443, 0);
         server.start();
         
         InetSocketAddress address = server.getAddress();
