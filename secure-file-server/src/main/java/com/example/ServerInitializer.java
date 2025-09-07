@@ -18,8 +18,7 @@ import com.sun.net.httpserver.HttpsParameters;
 import io.github.cdimascio.dotenv.Dotenv;
 
 /**
- * ServerInitializer is responsible for setting up the SSL/TLS configuration
- * for a secure server.
+ * Responsible for setting up the SSL/TLS configuration for a secure server.
  * 
  * It loads a PKCS#12 keystore file containing the server's private key
  * and certificate, and uses it to initialize an SSLContext that can be
@@ -94,20 +93,20 @@ public class ServerInitializer {
             public void configure(HttpsParameters params) {
                 try {
                     // Use the SSLContext to obtain default parameters and an engine.
-                SSLContext ctx = getSSLContext();
-                SSLEngine engine = ctx.createSSLEngine();
-                engine.setUseClientMode(false);
+                    SSLContext ctx = getSSLContext();
+                    SSLEngine engine = ctx.createSSLEngine();
+                    engine.setUseClientMode(false);
 
-                // Disable the need for clients to have certs.
-                SSLParameters sslParams = ctx.getDefaultSSLParameters();
-                sslParams.setNeedClientAuth(false)
-                ;
-                // Use engine defaults for cipher suites and protocols.
-                sslParams.setCipherSuites(engine.getEnabledCipherSuites());
-                sslParams.setProtocols(engine.getEnabledProtocols());
+                    // Disable the need for clients to have certs.
+                    SSLParameters sslParams = ctx.getDefaultSSLParameters();
+                    sslParams.setNeedClientAuth(false)
+                    ;
+                    // Use engine defaults for cipher suites and protocols.
+                    sslParams.setCipherSuites(engine.getEnabledCipherSuites());
+                    sslParams.setProtocols(engine.getEnabledProtocols());
 
-                // Apply our custom protocols to the server
-                params.setSSLParameters(sslParams);
+                    // Apply our custom protocols to the server
+                    params.setSSLParameters(sslParams);
                 } catch(Exception e) {
                     // Fail fast if configuration cannot be applied
                     throw new RuntimeException("Failed to configure HTTPS parameters", e);
