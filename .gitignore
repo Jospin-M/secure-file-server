@@ -4,4 +4,6 @@
 *.p12
 
 .env
+uploads/
+*.txt
 *.vscode
