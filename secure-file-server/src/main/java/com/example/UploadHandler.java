@@ -7,7 +7,13 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+
 public class UploadHandler implements HttpHandler {
+    private static final Path UPLOAD_DIR = Paths.get("uploads"); // create a representation of the directory that will receive uploaded files 
     private HttpExchange exchange;
 
     /**
@@ -40,12 +46,100 @@ public class UploadHandler implements HttpHandler {
         setExchange(exchange);
         failFast();
 
-        String contentType = getContentType();
-        String boundary = extractBoundary(contentType);
+        MultipartParser.Result result = readFile();
 
-        MultipartParser.Result result = null;
+        // if readFile failed, it already sent a 400, so we stop
+        if(null == result) return;
+
+        // if saveFile succeeds, we send the final success message
+        if(saveFile(result)) {
+            sendJson(200, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
+        }
+
+        String json = "{"
+            + "\"filename\":\"" + result.filename + "\","
+            + "\"size\":" + result.data.length
+            + "}";
+
+        sendJson(200, json);
+    }
+
+    /**
+     * Saves the uploaded file represented by {@link MultipartParser.Result} to disk.
+     *
+     * <p>This method performs the following steps:
+     * <ol>
+     *   <li>Sanitizes the filename to prevent directory traversal attacks by
+     *       extracting only the final path component</li>
+     *   <li>Validates that the filename is non-null and non-empty; otherwise,
+     *       sends a 400 JSON error response</li>
+     *   <li>Ensures that the upload directory exists, creating it if necessary;
+     *       if directory creation fails, sends a 500 JSON error response</li>
+     *   <li>Writes the uploaded file bytes to disk, truncating any existing file
+     *       with the same name; if writing fails, sends a 500 JSON error response</li>
+     * </ol>
+     *
+     * @param result the parsed multipart file upload containing the filename and file bytes
+     * @return {@code true} if the file was successfully saved; {@code false} otherwise
+     * @throws IOException if an I/O error occurs while accessing the request body or streams
+     */
+    private boolean saveFile(MultipartParser.Result result) throws IOException {
+        String safeFilename = Paths.get(result.filename).getFileName().toString(); // sanitize the filename sent by the client to prevent directory traversal
+
+        if(null == safeFilename || safeFilename.isEmpty()) {
+            sendJson(400, "{\"error\":\"Invalid filename\"}");
+
+            return false;
+        }
+
+        // verify that the /uploads directory exists
+        try { 
+            Files.createDirectories(UPLOAD_DIR);
+        } catch(IOException e) {
+            sendJson(500, "{\"error\":\"Failed to create upload directory\"}");
+            
+            return false;
+        }
+
+        Path filePath = UPLOAD_DIR.resolve(safeFilename);
 
         try {
+            Files.write( // write the uploaded bytes to disk
+                filePath,
+                result.data,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING 
+            );
+
+            return true;
+        
+        } catch (IOException e) {
+            sendJson(500, "{\"error\":\"Failed to write file\"}");
+        
+            return false;
+        }
+    }
+
+    /**
+    * Reads and parses a multipart/form-data file upload from the HTTP request body.
+    *
+    * <p>This method performs the following steps:
+    * <ol>
+    *   <li>Validates that the request has a {@code Content-Type: multipart/form-data} header</li>
+    *   <li>Extracts the multipart boundary from the Content-Type header</li>
+    *   <li>Parses the request body into a {@link MultipartParser.Result}</li>
+    *   <li>Closes the request body stream in all cases to prevent client hang</li>
+    * </ol>
+    * 
+    * @return a {@link MultipartParser.Result} if parsing succeeds; {@code null} otherwise
+    * @throws IOException if an I/O error occurs while reading or closing the request body
+    */
+    private MultipartParser.Result readFile() throws IOException {
+        MultipartParser.Result result = null;
+        
+        try {  
+            String contentType = getContentType();
+            String boundary = extractBoundary(contentType);
             result = MultipartParser.parse(exchange.getRequestBody(), boundary);
         
         } catch(Exception e) {
@@ -58,15 +152,10 @@ public class UploadHandler implements HttpHandler {
         if(null == result) {
             sendJson(400, "{\"error\":\"Invalid multipart request\"}");
             
-            return;
+            return null;
         }
 
-        String json = "{"
-            + "\"filename\":\"" + result.filename + "\","
-            + "\"size\":" + result.data.length
-            + "}";
-
-        sendJson(200, json);
+        return result;
     }
 
     /**
