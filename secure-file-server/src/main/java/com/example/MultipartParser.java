@@ -16,7 +16,7 @@ import java.util.Arrays;
  */
 public class MultipartParser {
     /**
-     * Immutable wrapper representing the parsing result.
+     * Immutable wrapper representing the result of the parsing.
      * It contains the extracted filename and the corresponding file bytes.
      */
     public static class Result {
@@ -52,7 +52,7 @@ public class MultipartParser {
     }
 
     /**
-     * Reads the entired contents of an {@link InputStream} into a byte array.
+     * Reads the entire contents of an {@link InputStream} into a byte array.
      * 
      * @param input input stream to read from
      * @return all bytes from the stream
