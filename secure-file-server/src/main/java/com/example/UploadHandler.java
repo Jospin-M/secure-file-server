@@ -62,13 +62,6 @@ public class UploadHandler implements HttpHandler {
         if(saveFile(result)) {
             sendJson(200, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
         }
-
-        String json = "{"
-            + "\"filename\":\"" + result.filename + "\","
-            + "\"size\":" + result.data.length
-            + "}";
-
-        sendJson(200, json);
     }
 
     /**
