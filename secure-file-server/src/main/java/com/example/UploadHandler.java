@@ -6,17 +6,19 @@ import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
-
+import java.util.logging.Logger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 
 public class UploadHandler implements HttpHandler {
     private final Path UPLOAD_DIR = Paths.get("uploads"); // create a representation of the directory that will receive uploaded files 
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024;
     private HttpExchange exchange;
-
+    private final Logger logger = Logger.getLogger(UploadHandler.class.getName());
+    
     /**
      * Entry point for handling an incoming HTTP request to the upload endpoint.
      *
@@ -117,6 +119,9 @@ public class UploadHandler implements HttpHandler {
                 StandardOpenOption.TRUNCATE_EXISTING 
             );
 
+            // log file name
+            logFileInfo(safeFilename, result.data.length);
+ 
             return true;
         
         } catch (IOException e) {
@@ -124,6 +129,31 @@ public class UploadHandler implements HttpHandler {
         
             return false;
         }
+    }
+
+    /**
+     * Logs metadata about a completed file upload for server-side observability.
+     *
+     * <p>This method records non-sensitive upload information including the
+     * client IP address, upload timestamp, filename, and file size. The data is
+     * written to the server logging subsystem and is not exposed to the HTTP client.</p>
+     *
+     * @param filename the sanitized filename of the uploaded file
+     * @param fileSize the size of the uploaded file in bytes
+     */
+    private void logFileInfo(String filename, long fileSize) {
+        String clientIP = exchange.getRemoteAddress().getAddress().getHostAddress();
+        Instant timestamp = Instant.now();
+
+        logger.info(
+            String.format(
+                "UPLOAD filename=%s size=%dB ip=%s time=%s",
+                filename,
+                fileSize,
+                clientIP,
+                timestamp
+            )
+        );
     }
 
     /**
