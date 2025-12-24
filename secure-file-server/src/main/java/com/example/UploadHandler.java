@@ -13,7 +13,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
 public class UploadHandler implements HttpHandler {
-    private static final Path UPLOAD_DIR = Paths.get("uploads"); // create a representation of the directory that will receive uploaded files 
+    private final Path UPLOAD_DIR = Paths.get("uploads"); // create a representation of the directory that will receive uploaded files 
+    private final long MAX_FILE_SIZE = 10 * 1024 * 1024;
     private HttpExchange exchange;
 
     /**
@@ -90,7 +91,12 @@ public class UploadHandler implements HttpHandler {
             sendJson(400, "{\"error\":\"Invalid filename\"}");
 
             return false;
-        }
+        
+        } else if(!safeFilename.matches("[a-zA-Z0-9._-]+")) {
+            sendJson(400, "{\"error\":\"Invalid filename characters\"}");
+            
+            return false;
+        } 
 
         // verify that the /uploads directory exists
         try { 
@@ -142,6 +148,17 @@ public class UploadHandler implements HttpHandler {
             String boundary = extractBoundary(contentType);
             result = MultipartParser.parse(exchange.getRequestBody(), boundary);
         
+            if(null == result.data || result.data.length == 0) {
+                sendJson(400, "{\"error\":\"Empty file uploaded\"}");
+
+                return null;
+            
+            } else if(result.data.length > MAX_FILE_SIZE) {
+                sendJson(413, "{\"error\":\"File too large\"}");
+
+                return null;
+            }
+
         } catch(Exception e) {
             sendJson(400, "{\"error\":\"Failed to parse multipart data\"}");
         
