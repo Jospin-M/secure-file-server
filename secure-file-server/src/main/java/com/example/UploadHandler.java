@@ -1,18 +1,20 @@
 package com.example;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import java.nio.charset.StandardCharsets;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.List;
-import java.util.logging.Logger;
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.Files;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.StandardOpenOption;
+
+import java.util.List;
 import java.time.Instant;
+import java.util.logging.Logger;
 
 /** An HTTP handler responsible for processing file upload requests.
  *  

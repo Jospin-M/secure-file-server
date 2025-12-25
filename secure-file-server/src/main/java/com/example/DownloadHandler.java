@@ -1,27 +1,21 @@
 package com.example;
 
-import java.io.File;
 import java.io.IOException;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-
 import java.nio.charset.StandardCharsets;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.List;
-import java.util.logging.Logger;
-import java.nio.file.Files;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.time.Instant;
+import java.nio.file.Files;
+import java.io.InputStream;
+import java.io.OutputStream;
+
 
 import java.net.URI;
 
 public class DownloadHandler implements HttpHandler {
-    private static final Path UPLOAD_ROOT = Paths.get("uploads").toAbsolutePath().normalize();
+    private static final Path UPLOAD_ROOT = Paths.get("uploads");
     private HttpExchange exchange;
 
     @Override
@@ -31,9 +25,17 @@ public class DownloadHandler implements HttpHandler {
         Path resolved = verifyPath(uri);
         
         if(null == resolved) return;
-
+        
         long size = Files.size(resolved);
+        exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
         exchange.sendResponseHeaders(200, size);
+
+        // stream file back to client
+        try(InputStream in = Files.newInputStream(resolved)){
+            OutputStream out = exchange.getResponseBody();
+            in.transferTo(out);
+            out.close();
+        }
     }
 
     public Path verifyPath(URI uri) throws IOException {
@@ -52,6 +54,7 @@ public class DownloadHandler implements HttpHandler {
         }
 
         // file checks
+    
         if(!Files.exists(resolved)) { 
             sendJson(404, "{\"error\":\"File not found\"}");
 
