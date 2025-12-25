@@ -11,13 +11,26 @@ import java.nio.file.Files;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-
 import java.net.URI;
 
 public class DownloadHandler implements HttpHandler {
     private static final Path UPLOAD_ROOT = Paths.get("uploads");
     private HttpExchange exchange;
 
+    /**
+     * Handles HTTP requests to the download endpoint.
+     *
+     * <p>This method processes a client download request by:
+     * <ol>
+     *   <li>Extracting the requested resource from the request URI</li>
+     *   <li>Validating and resolving the requested path against the upload root</li>
+     *   <li>Rejecting invalid, unsafe, or inaccessible paths</li>
+     *   <li>Streaming the requested file back to the client</li>
+     * </ol>
+     *
+     * <p>If path validation fails, an appropriate JSON error response is sent
+     * and request processing terminates immediately.
+     */
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         setExchange(exchange);
@@ -25,7 +38,7 @@ public class DownloadHandler implements HttpHandler {
         Path resolved = verifyPath(uri);
         
         if(null == resolved) return;
-        
+
         long size = Files.size(resolved);
         exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
         exchange.sendResponseHeaders(200, size);
@@ -38,6 +51,26 @@ public class DownloadHandler implements HttpHandler {
         }
     }
 
+    /**
+     * Validates and resolves a user-supplied file path from the request URI.
+     *
+     * <p>This method performs strict security and correctness checks to prevent:
+     * <ul>
+     *   <li>Path traversal attacks (e.g. {@code ../})</li>
+     *   <li>Access to files outside the upload directory</li>
+     *   <li>Requests for non-existent or non-regular files</li>
+     *   <li>Access to unreadable files</li>
+     * </ul>
+     *
+     * <p>The filename is extracted from the final path segment of the URI,
+     * resolved against the upload root directory, and normalized before
+     * validation.
+     * 
+     * @param uri the request URI containing the user-supplied file path
+     * @return the validated and resolved {@link Path} if the request is valid;
+     *         {@code null} otherwise
+     * @throws IOException if an I/O error occurs while validating the file
+     */
     public Path verifyPath(URI uri) throws IOException {
         // obtain user-supplied filename
         String path = uri.getPath();
