@@ -1,18 +1,20 @@
 package com.example;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import java.nio.charset.StandardCharsets;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.List;
-import java.util.logging.Logger;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+
+import java.util.List;
 import java.time.Instant;
+import java.util.logging.Logger;
 
 /** An HTTP handler responsible for processing file upload requests.
  *  
@@ -22,9 +24,10 @@ import java.time.Instant;
  * always closed to prevent connection leaks or client hangs.</p>
 */
 public class UploadHandler implements HttpHandler {
+    private HttpExchange exchange;
     private final Logger logger = Logger.getLogger(UploadHandler.class.getName());
     private final Path UPLOAD_DIR = Paths.get("uploads"); // create a representation of the directory that will receive uploaded files 
-    private HttpExchange exchange;
+    
 
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024;
     private final long MAX_REQUEST_SIZE = 12 * 1024 * 1024;
@@ -43,9 +46,6 @@ public class UploadHandler implements HttpHandler {
      *
      * <p>On any error path, a JSON error response is sent and the request body
      * is always fully closed to avoid connection deadlock.
-     *
-     * @param exchange the HTTP exchange representing the client request/response
-     * @throws IOException if an I/O error occurs while reading or writing
      */
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -62,13 +62,6 @@ public class UploadHandler implements HttpHandler {
         if(saveFile(result)) {
             sendJson(200, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
         }
-
-        String json = "{"
-            + "\"filename\":\"" + result.filename + "\","
-            + "\"size\":" + result.data.length
-            + "}";
-
-        sendJson(200, json);
     }
 
     /**

@@ -11,6 +11,7 @@ public class App {
         SSLContext sslContext = initializer.createSSLContext();
         
         HttpsServer server = ServerInitializer.createConfiguredHttpsServer(sslContext, 8443, 0);
+        server.createContext("/download", new DownloadHandler());
         server.createContext("/upload", new UploadHandler());
         server.start();
         
