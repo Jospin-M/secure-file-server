@@ -1,6 +1,5 @@
 package com.example;
 
-import java.nio.charset.StandardCharsets;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -9,12 +8,9 @@ import java.nio.file.Paths;
 import java.nio.file.Files;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.StandardOpenOption;
 
 import java.util.List;
-import java.time.Instant;
-import java.util.logging.Logger;
 
 /** An HTTP handler responsible for processing file upload requests.
  *  
@@ -25,13 +21,11 @@ import java.util.logging.Logger;
 */
 public class UploadHandler implements HttpHandler {
     private HttpExchange exchange;
-    private final Logger logger = Logger.getLogger(UploadHandler.class.getName());
     private final Path UPLOAD_DIR = Paths.get("uploads"); // create a representation of the directory that will receive uploaded files 
-    
 
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024;
-    private final long MAX_REQUEST_SIZE = 12 * 1024 * 1024;
-    
+    private static final long MAX_REQUEST_SIZE = 12 * 1024 * 1024;
+
     /**
      * Entry point for handling an incoming HTTP request to the upload endpoint.
      *
@@ -60,7 +54,7 @@ public class UploadHandler implements HttpHandler {
 
         // if saveFile succeeds, we send the final success message
         if(saveFile(result)) {
-            sendJson(200, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
+            Utils.sendJson(exchange, 200, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
         }
     }
 
@@ -87,12 +81,12 @@ public class UploadHandler implements HttpHandler {
         String safeFilename = Paths.get(result.filename).getFileName().toString(); // sanitize the filename sent by the client to prevent directory traversal
 
         if(null == safeFilename || safeFilename.isEmpty()) {
-            sendJson(400, "{\"error\":\"Invalid filename\"}");
+            Utils.sendJson(exchange,400, "{\"error\":\"Invalid filename\"}");
 
             return false;
         
         } else if(!safeFilename.matches("[a-zA-Z0-9._-]+")) {
-            sendJson(400, "{\"error\":\"Invalid filename characters\"}");
+            Utils.sendJson(exchange,400, "{\"error\":\"Invalid filename characters\"}");
             
             return false;
         } 
@@ -101,7 +95,7 @@ public class UploadHandler implements HttpHandler {
         try { 
             Files.createDirectories(UPLOAD_DIR);
         } catch(IOException e) {
-            sendJson(500, "{\"error\":\"Failed to create upload directory\"}");
+            Utils.sendJson(exchange,500, "{\"error\":\"Failed to create upload directory\"}");
             
             return false;
         }
@@ -117,40 +111,15 @@ public class UploadHandler implements HttpHandler {
             );
 
             // log file name
-            logFileInfo(safeFilename, result.data.length);
+            Utils.logFileInfo(exchange, safeFilename, result.data.length, "UPLOAD");
  
             return true;
         
         } catch (IOException e) {
-            sendJson(500, "{\"error\":\"Failed to write file\"}");
+            Utils.sendJson(exchange,500, "{\"error\":\"Failed to write file\"}");
         
             return false;
         }
-    }
-
-    /**
-     * Logs metadata about a completed file upload for server-side observability.
-     *
-     * <p>This method records non-sensitive upload information including the
-     * client IP address, upload timestamp, filename, and file size. The data is
-     * written to the server logging subsystem and is not exposed to the HTTP client.</p>
-     *
-     * @param filename the sanitized filename of the uploaded file
-     * @param fileSize the size of the uploaded file in bytes
-     */
-    private void logFileInfo(String filename, long fileSize) {
-        String clientIP = exchange.getRemoteAddress().getAddress().getHostAddress();
-        Instant timestamp = Instant.now();
-
-        logger.info(
-            String.format(
-                "UPLOAD filename=%s size=%dB ip=%s time=%s",
-                filename,
-                fileSize,
-                clientIP,
-                timestamp
-            )
-        );
     }
 
     /**
@@ -178,22 +147,22 @@ public class UploadHandler implements HttpHandler {
             result = MultipartParser.parse(limitedStream, boundary);
         
             if(null == result.data || result.data.length == 0) {
-                sendJson(400, "{\"error\":\"Empty file uploaded\"}");
+                Utils.sendJson(exchange,400, "{\"error\":\"Empty file uploaded\"}");
 
                 return null;
             
             } else if(result.data.length > MAX_FILE_SIZE) {
-                sendJson(413, "{\"error\":\"File too large\"}");
+                Utils.sendJson(exchange,413, "{\"error\":\"File too large\"}");
 
                 return null;
             }
 
         } catch (IOException e) {
-            sendJson(413, "{\"error\":\"Request too large\"}");
+            Utils.sendJson(exchange,413, "{\"error\":\"Request too large\"}");
             
             return null;
         } catch (Exception e) {
-            sendJson(400, "{\"error\":\"Failed to parse multipart data\"}");
+            Utils.sendJson(exchange,400, "{\"error\":\"Failed to parse multipart data\"}");
             
             return null ;
         } finally {
@@ -204,34 +173,61 @@ public class UploadHandler implements HttpHandler {
     }
 
     /**
-     * Sends a JSON response with the given HTTP status code.
+     * Performs early validation of the incoming HTTP request and terminates
+     * processing immediately if a fatal protocol violation is detected.
      *
-     * <p>This method:
+     * <p>This method is intended to be called at the beginning of request handling
+     * to avoid unnecessary work and resource consumption.</p>
+     *
+     * <p><b>Validations performed:</b>
      * <ul>
-     *   <li>Encodes the JSON string as UTF-8</li>
-     *   <li>Sets the {@code Content-Type} header to {@code application/json}</li>
-     *   <li>Sends response headers with an explicit Content-Length</li>
-     *   <li>Writes the response body and closes the response stream</li>
+     *   <li>Ensures the request method is {@code POST}</li>
+     *   <li>Validates the {@code Content-Length} header against a configured size limit</li>
      * </ul>
-     *
-     * <p>Closing the response body completes the HTTP exchange and allows
-     * the client to receive the response.
-     *
-     * @param status the HTTP status code to send
-     * @param json the JSON payload to send as the response body
-     * @throws IOException if an I/O error occurs while writing the response
+     * 
+     * @return {@code true} if request handling should be aborted, {@code false} otherwise
+     * @throws IOException if an I/O error occurs while sending the response
      */
-    private void sendJson(int status, String json) throws IOException {
-        // convert the response to bytes
-        byte[] body = json.getBytes(StandardCharsets.UTF_8);
-        
-        // set headers and write back response
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, body.length);
-        
-        try(OutputStream out = exchange.getResponseBody()) {
-            out.write(body);
+    private boolean failFast() throws IOException {
+        // validate the HTTP method used by the client
+        if(!Utils.isHTTPMethodValid(exchange, "POST")) return true;
+
+        if(!isContentLengthValid(exchange)) return true;
+
+        return false;
+    }
+
+    /**
+     * Validates the {@code Content-Length} header of the current HTTP request.
+     *
+     * <p>If the {@code Content-Length} header is present, this method ensures that:
+     * <ul>
+     *   <li>The header value is a valid numeric value</li>
+     *   <li>The declared request size does not exceed {@code MAX_REQUEST_SIZE}</li>
+     * </ul>
+     * @return {@code true} if the Content-Length is valid or absent, {@code false} otherwise
+     * @throws IOException if an I/O error occurs while sending the response
+     */
+    private boolean isContentLengthValid(HttpExchange exchange) throws IOException {
+        String contentLengthHeader = exchange.getRequestHeaders().getFirst("Content-Length");
+
+        if(null != contentLengthHeader) {
+            try {
+                long contentLength = Long.parseLong(contentLengthHeader);
+
+                if(contentLength > MAX_REQUEST_SIZE) {
+                    Utils.sendJson(exchange, 413, "{\"error\":\"Request too large\"}");
+                    
+                    return false;
+                }
+            } catch(NumberFormatException ignored) {
+                Utils.sendJson(exchange, 400, "{\"error\":\"Invalid Content-Length\"}");
+            
+                return false;
+            }
         }
+
+        return true;
     }
 
     /**
@@ -267,79 +263,10 @@ public class UploadHandler implements HttpHandler {
         }
 
         if(null == boundary) {
-            sendJson(400, "{\"error\":\"Missing multipart boundary\"}");
+            Utils.sendJson(exchange,400, "{\"error\":\"Missing multipart boundary\"}");
         }
 
         return null;
-    }
-
-    /**
-     * Performs early validation of the incoming HTTP request and terminates
-     * processing immediately if a fatal protocol violation is detected.
-     *
-     * <p>This method is intended to be called at the beginning of request handling
-     * to avoid unnecessary work and resource consumption.</p>
-     *
-     * <p><b>Validations performed:</b>
-     * <ul>
-     *   <li>Ensures the request method is {@code POST}</li>
-     *   <li>Validates the {@code Content-Length} header against a configured size limit</li>
-     * </ul>
-     * 
-     * @return {@code true} if request handling should be aborted, {@code false} otherwise
-     * @throws IOException if an I/O error occurs while sending the response
-     */
-    private boolean failFast() throws IOException {
-        // validate the HTTP method used by the client
-        if(!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
-            // indicate which HTTP headers are allowed for this endpoint
-            exchange.getResponseHeaders().set(
-                "Allow", 
-                "POST");
-
-            sendJson(405, "{\"error\":\"Method Not Allowed\"}");
-            
-            return true;
-        } 
-
-        if(isContentLengthValid()) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Validates the {@code Content-Length} header of the current HTTP request.
-     *
-     * <p>If the {@code Content-Length} header is present, this method ensures that:
-     * <ul>
-     *   <li>The header value is a valid numeric value</li>
-     *   <li>The declared request size does not exceed {@code MAX_REQUEST_SIZE}</li>
-     * </ul>
-     * @return {@code true} if the Content-Length is valid or absent, {@code false} otherwise
-     * @throws IOException if an I/O error occurs while sending the response
-     */
-    private boolean isContentLengthValid() throws IOException {
-        String contentLengthHeader = exchange.getRequestHeaders().getFirst("Content-Length");
-
-        if(null != contentLengthHeader) {
-            try {
-                long contentLength = Long.parseLong(contentLengthHeader);
-
-                if(contentLength > MAX_REQUEST_SIZE) {
-                    sendJson(413, "{\"error\":\"Request too large\"}");
-                    
-                    return false;
-                }
-            } catch(NumberFormatException ignored) {
-                sendJson(400, "{\"error\":\"Invalid Content-Length\"}");
-            
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -360,7 +287,7 @@ public class UploadHandler implements HttpHandler {
         List<String> contentTypes = exchange.getRequestHeaders().get("Content-Type");
         
         if(contentTypes == null || contentTypes.isEmpty()) {
-            sendJson(400, "{\"error\":\"Missing Content-Type\"}");
+            Utils.sendJson(exchange,400, "{\"error\":\"Missing Content-Type\"}");
             
             return null;
         }
@@ -368,7 +295,7 @@ public class UploadHandler implements HttpHandler {
         String contentType = contentTypes.get(0);
 
         if(!contentType.startsWith("multipart/form-data")) {
-            sendJson(400, "{\"error\":\"Invalid Content-Type\"}");
+            Utils.sendJson(exchange,400, "{\"error\":\"Invalid Content-Type\"}");
             
             return null;
         }
