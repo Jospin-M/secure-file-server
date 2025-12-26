@@ -1,5 +1,6 @@
-package com.example;
+package com.example.handlers;
 
+import com.example.Utils;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 

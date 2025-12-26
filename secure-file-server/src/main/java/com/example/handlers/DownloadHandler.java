@@ -1,7 +1,8 @@
-package com.example;
+package com.example.handlers;
 
 import java.io.IOException;
 import com.sun.net.httpserver.HttpHandler;
+import com.example.Utils;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.nio.file.Path;
