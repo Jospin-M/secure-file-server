@@ -1,8 +1,12 @@
 package com.example.handlers;
 
 import java.io.IOException;
-import com.sun.net.httpserver.HttpHandler;
+
+import java.net.URI;
 import com.example.Utils;
+import com.example.security.Authenticator;
+import com.example.security.OwnershipStore;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.nio.file.Path;
@@ -11,11 +15,17 @@ import java.nio.file.Files;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import java.net.URI;
-
 public class DownloadHandler implements HttpHandler {
     private HttpExchange exchange;
     private final Path UPLOAD_ROOT = Paths.get("uploads");
+
+    private final Authenticator authenticator;
+    private final OwnershipStore ownershipStore;
+
+    public DownloadHandler(Authenticator authenticator, OwnershipStore ownershipStore) {
+        this.authenticator = authenticator;
+        this.ownershipStore = ownershipStore;
+    }
 
     /**
      * Handles HTTP requests to the download endpoint.
@@ -37,8 +47,9 @@ public class DownloadHandler implements HttpHandler {
 
         if(Utils.isHTTPMethodValid(exchange, "GET") == false) return;
 
+        String userID = authenticator.authenticate(exchange);
         URI uri = exchange.getRequestURI();
-        Path resolved = verifyPath(uri);
+        Path resolved = verifyPath(uri, userID);
         
         if(null == resolved) return;
 
@@ -71,44 +82,36 @@ public class DownloadHandler implements HttpHandler {
      * validation.
      * 
      * @param uri the request URI containing the user-supplied file path
+     * @param userID the ID of the user that requested the file
      * @return the validated and resolved {@link Path} if the request is valid;
      *         {@code null} otherwise
      * @throws IOException if an I/O error occurs while validating the file
      */
-    public Path verifyPath(URI uri) throws IOException {
+    public Path verifyPath(URI uri, String userID) throws IOException {
+        Path resolved = getFileName(uri);
+
+        if(!resolved.startsWith(UPLOAD_ROOT)) {
+            Utils.sendJson(exchange, 403, "{\"error\":\"Invalid file path\"}");
+
+            return null;
+        
+        } else if(!Files.exists(resolved) || 
+            !ownershipStore.isOwner(resolved.getFileName().toString(), userID)) { 
+            Utils.sendJson(exchange,404, "{\"error\":\"File not found\"}");
+
+            return null;
+        } 
+
+        return resolved;
+    }
+
+    private Path getFileName(URI uri) {
         // obtain user-supplied filename
         String path = uri.getPath();
         String requested = path.substring(path.lastIndexOf('/') + 1);
 
         // resolve path
         Path resolved = UPLOAD_ROOT.resolve(requested).normalize();
-        
-        // verify that the user is trying to access a file from /uploads
-        if(!resolved.startsWith(UPLOAD_ROOT)) {
-            Utils.sendJson(exchange, 403, "{\"error\":\"Invalid file path\"}");
-
-            return null;
-        }
-
-        // file checks
-    
-        if(!Files.exists(resolved)) { 
-            Utils.sendJson(exchange,404, "{\"error\":\"File not found\"}");
-
-            return null;
-        }
-
-        if(!Files.isRegularFile(resolved)) {
-            Utils.sendJson(exchange,403, "{\"error\":\"Requested path is not a file\"}");
-
-            return null;
-        }
-
-        if(!Files.isReadable(resolved)) {
-            Utils.sendJson(exchange,403, "{\"error\":\"File is not accessible\"}");
-
-            return null;
-        }
 
         return resolved;
     }

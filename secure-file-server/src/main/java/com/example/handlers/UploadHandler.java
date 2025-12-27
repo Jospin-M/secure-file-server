@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.nio.file.StandardOpenOption;
 
 import java.util.List;
+import com.example.security.*;
 
 /** An HTTP handler responsible for processing file upload requests.
  *  
@@ -26,6 +27,14 @@ public class UploadHandler implements HttpHandler {
 
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024;
     private static final long MAX_REQUEST_SIZE = 12 * 1024 * 1024;
+
+    private final Authenticator authenticator;
+    private final OwnershipStore ownershipStore;
+
+    public UploadHandler(Authenticator authenticator, OwnershipStore ownershipStore) {
+        this.authenticator = authenticator;
+        this.ownershipStore = ownershipStore;
+    }
 
     /**
      * Entry point for handling an incoming HTTP request to the upload endpoint.
@@ -46,7 +55,10 @@ public class UploadHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         setExchange(exchange);
 
-        if(failFast() == true) return;
+        String userID = authenticator.authenticate(exchange);
+
+        if(null == userID) return;
+        else if(failFast()) return;
 
         MultipartParser.Result result = readFile();
 
@@ -54,8 +66,8 @@ public class UploadHandler implements HttpHandler {
         if(null == result) return;
 
         // if saveFile succeeds, we send the final success message
-        if(saveFile(result)) {
-            Utils.sendJson(exchange, 200, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
+        if(saveFile(result, userID)) {
+            Utils.sendJson(exchange, 201, "{\"status\":\"success\", \"file\":\"" + result.filename + "\"}");
         }
     }
 
@@ -75,10 +87,11 @@ public class UploadHandler implements HttpHandler {
      * </ol>
      *
      * @param result the parsed multipart file upload containing the filename and file bytes
+     * @param userID the ID of the user that uploaded the file
      * @return {@code true} if the file was successfully saved; {@code false} otherwise
      * @throws IOException if an I/O error occurs while accessing the request body or streams
      */
-    private boolean saveFile(MultipartParser.Result result) throws IOException {
+    private boolean saveFile(MultipartParser.Result result, String userID) throws IOException {
         String safeFilename = Paths.get(result.filename).getFileName().toString(); // sanitize the filename sent by the client to prevent directory traversal
 
         if(null == safeFilename || safeFilename.isEmpty()) {
@@ -113,7 +126,10 @@ public class UploadHandler implements HttpHandler {
 
             // log file name
             Utils.logFileInfo(exchange, safeFilename, result.data.length, "UPLOAD");
- 
+            
+            // record file ownership
+            ownershipStore.addFile(safeFilename, userID);
+
             return true;
         
         } catch (IOException e) {
@@ -190,7 +206,6 @@ public class UploadHandler implements HttpHandler {
      * @throws IOException if an I/O error occurs while sending the response
      */
     private boolean failFast() throws IOException {
-        // validate the HTTP method used by the client
         if(!Utils.isHTTPMethodValid(exchange, "POST")) return true;
 
         if(!isContentLengthValid(exchange)) return true;
