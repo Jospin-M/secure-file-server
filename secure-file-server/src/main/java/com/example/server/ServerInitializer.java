@@ -41,7 +41,7 @@ public class ServerInitializer {
         // Load the keystore with the certificate and private key store in the PKCS#12 file
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         
-        try(FileInputStream fis = new FileInputStream("certs\\keystore.p12")) {
+        try(FileInputStream fis = new FileInputStream("certs/keystore.p12")) {
             keyStore.load(fis, keyStorePassword);
         } 
 
