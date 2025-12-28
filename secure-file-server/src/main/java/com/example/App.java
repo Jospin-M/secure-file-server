@@ -1,5 +1,6 @@
 package com.example;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -21,6 +22,7 @@ public class App {
         ServerInitializer initializer = new ServerInitializer();
         SSLContext sslContext = initializer.createSSLContext();
         
+        Files.createDirectories(CONFIG_DIR); // create the config directory if it doesn't exist yet
         Path tokenFile = CONFIG_DIR.resolve("tokens.txt");
         TokenStore tokenStore = new TokenStore(tokenFile);
         Authenticator authenticator = new Authenticator(tokenStore);
