@@ -78,7 +78,7 @@ All API endpoints require valid authentication tokens. To grant access:
 
 1. Add token-user pairs to `config/tokens.txt`
 2. Format: `access_token|user_id` (one pair per line)
-3. Include the token in client requests (e.g curl -k -H "Authorization: Bearer [token]" https://localhost:8443/download/file.txt"
+3. Include the token in client requests (e.g curl -k -H "Authorization: Bearer [token]" https://[domain]/[endpoint]/[file]"
 
 
 Requests without valid tokens will be rejected with a `401 Unauthorized` response.
