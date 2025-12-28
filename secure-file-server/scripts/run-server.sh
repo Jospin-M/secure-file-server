@@ -1,8 +1,18 @@
-#!/usr/bin/env bash
+#!/bin/env bash
 set -e
 
-SRC_DIR="src"
-MAIN_CLASS="com.example.App"
+CERT_DIR="/app/certs"
+KEYSTORE="$CERT_DIR/keystore.p12"
 
-mvn compile
-mvn exec:java -Dexec.mainClass="$MAIN_CLASS"
+echo "Starting container..."
+
+# generate certs if missing
+if [ ! -f "$KEYSTORE" ]; then
+    echo "No TLS certificates found. Generating..."
+    /app/generate-cert.sh
+else
+    echo "TLS certificates found."
+fi
+
+echo "Starting HTTPS server..."
+exec java -jar /app/server.jar
