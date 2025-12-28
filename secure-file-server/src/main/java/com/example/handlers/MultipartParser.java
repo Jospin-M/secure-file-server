@@ -1,4 +1,4 @@
-package com.example;
+package com.example.handlers;
 
 import java.nio.charset.StandardCharsets;
 import java.io.ByteArrayOutputStream;

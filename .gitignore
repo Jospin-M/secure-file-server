@@ -5,5 +5,6 @@
 
 .env
 *.vscode
-
+config/
+tokens.txt
 uploads/

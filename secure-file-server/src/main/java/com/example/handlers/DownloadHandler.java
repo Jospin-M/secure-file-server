@@ -1,7 +1,11 @@
-package com.example;
+package com.example.handlers;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+
+import java.net.URI;
+import com.example.Utils;
+import com.example.security.Authenticator;
+import com.example.security.OwnershipStore;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -11,11 +15,25 @@ import java.nio.file.Files;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import java.net.URI;
-
+/** An HTTP handler responsible for processing authenticated file download requests.
+ *
+ * <p>This handler serves files from the local {@code uploads/} directory after
+ * validating the request method, authenticating the client, and enforcing
+ * per-user ownership constraints. Requested file paths are strictly validated
+ * to prevent path traversal and unauthorized access. On a successful request, the handler streams the requested file directly
+ * to the client using a binary response. </p>
+ */
 public class DownloadHandler implements HttpHandler {
-    private static final Path UPLOAD_ROOT = Paths.get("uploads");
     private HttpExchange exchange;
+    private final Path UPLOAD_ROOT = Paths.get("uploads");
+
+    private final Authenticator authenticator;
+    private final OwnershipStore ownershipStore;
+
+    public DownloadHandler(Authenticator authenticator, OwnershipStore ownershipStore) {
+        this.authenticator = authenticator;
+        this.ownershipStore = ownershipStore;
+    }
 
     /**
      * Handles HTTP requests to the download endpoint.
@@ -34,14 +52,19 @@ public class DownloadHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         setExchange(exchange);
+
+        if(Utils.isHTTPMethodValid(exchange, "GET") == false) return;
+
+        String userID = authenticator.authenticate(exchange);
         URI uri = exchange.getRequestURI();
-        Path resolved = verifyPath(uri);
+        Path resolved = verifyPath(uri, userID);
         
         if(null == resolved) return;
 
         long size = Files.size(resolved);
         exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
         exchange.sendResponseHeaders(200, size);
+        Utils.logFileInfo(exchange, resolved.getFileName().toString(), size, "DOWNLOAD");
 
         // stream file back to client
         try(InputStream in = Files.newInputStream(resolved)){
@@ -67,77 +90,38 @@ public class DownloadHandler implements HttpHandler {
      * validation.
      * 
      * @param uri the request URI containing the user-supplied file path
+     * @param userID the ID of the user that requested the file
      * @return the validated and resolved {@link Path} if the request is valid;
      *         {@code null} otherwise
      * @throws IOException if an I/O error occurs while validating the file
      */
-    public Path verifyPath(URI uri) throws IOException {
+    public Path verifyPath(URI uri, String userID) throws IOException {
+        Path resolved = getFileName(uri);
+
+        if(!resolved.startsWith(UPLOAD_ROOT)) {
+            Utils.sendJson(exchange, 403, "{\"error\":\"Invalid file path\"}");
+
+            return null;
+        
+        } else if(!Files.exists(resolved) || 
+            !ownershipStore.isOwner(resolved.getFileName().toString(), userID)) { 
+            Utils.sendJson(exchange,404, "{\"error\":\"File not found\"}");
+
+            return null;
+        } 
+
+        return resolved;
+    }
+
+    private Path getFileName(URI uri) {
         // obtain user-supplied filename
         String path = uri.getPath();
         String requested = path.substring(path.lastIndexOf('/') + 1);
 
         // resolve path
         Path resolved = UPLOAD_ROOT.resolve(requested).normalize();
-        
-        // verify that the user is trying to access a file from /uploads
-        if(!resolved.startsWith(UPLOAD_ROOT)) {
-            sendJson(403, "{\"error\":\"Invalid file path\"}");
-
-            return null;
-        }
-
-        // file checks
-    
-        if(!Files.exists(resolved)) { 
-            sendJson(404, "{\"error\":\"File not found\"}");
-
-            return null;
-        }
-
-        if(!Files.isRegularFile(resolved)) {
-            sendJson(403, "{\"error\":\"Requested path is not a file\"}");
-
-            return null;
-        }
-
-        if(!Files.isReadable(resolved)) {
-            sendJson(403, "{\"error\":\"File is not accessible\"}");
-
-            return null;
-        }
 
         return resolved;
-    }
-
-    /**
-     * Sends a JSON response with the given HTTP status code.
-     *
-     * <p>This method:
-     * <ul>
-     *   <li>Encodes the JSON string as UTF-8</li>
-     *   <li>Sets the {@code Content-Type} header to {@code application/json}</li>
-     *   <li>Sends response headers with an explicit Content-Length</li>
-     *   <li>Writes the response body and closes the response stream</li>
-     * </ul>
-     *
-     * <p>Closing the response body completes the HTTP exchange and allows
-     * the client to receive the response.
-     *
-     * @param status the HTTP status code to send
-     * @param json the JSON payload to send as the response body
-     * @throws IOException if an I/O error occurs while writing the response
-     */
-    private void sendJson(int status, String json) throws IOException {
-        // convert the response to bytes
-        byte[] body = json.getBytes(StandardCharsets.UTF_8);
-        
-        // set headers and write back response
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, body.length);
-        
-        try(OutputStream out = exchange.getResponseBody()) {
-            out.write(body);
-        }
     }
 
     private void setExchange(HttpExchange exchange) {
