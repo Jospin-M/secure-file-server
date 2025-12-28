@@ -28,6 +28,7 @@
     COPY certs /app/certs
     COPY config /app/config
     COPY uploads /app/uploads
+    COPY .env /app/.env
 
     # ensure scripts are executable
     RUN chmod +x /app/*.sh

@@ -1,30 +1,34 @@
-#!/usr/bin/env bash
+#!/bin/env bash
 set -e 
 
-CERT_DIR="../certs"
+CERT_DIR="/app/certs"
 KEY_FILE="$CERT_DIR/server.key"
+KEYSTORE="$CERT_DIR/keystore.p12"
 CERT_FILE="$CERT_DIR/server.crt"
-P12_FILE="$CERT_DIR/keystore.p12"
-ALIAS="https-server"
-PASSWORD="changeit"
 
+ALIAS="https-server"
+KEYSTORE_PASSWORD="changeit"
+
+# create cert directory if missing
 mkdir -p "$CERT_DIR"
 
-echo "Generating private key..."
-openssl genrsa -out "$KEY_FILE" 2048
+# exit early if certs already exist
+if [i "$KEYSTORE"]; then
+    echo "Certificates already exist. Skipping generation."
+    exit 0
+fi
 
-echo "Generating self-signed certificate..."
-openssl req -new -x509 \
--key "$KEY_FILE" \
--out "$CERT_FILE" \
--days 365 \
--subj "/CN=localhost"
+echo "Generating TLS certificates..."
 
-echo "Packaging into PKCS12 keystore..."
-openssl pkcs12 -export \
--inkey "$KEY_FILE" \
--in "$CERT_FILE" \
--out "$P12_FILE" \
--name "$ALIAS" \
--passout pass:"$PASSWORD"
+keytool -genkeypair \
+    -alias server \
+    -keyalg RSA \
+    -keysize 2048 \
+    -storetype PKCS12 \
+    -keystore "$KEYSTORE" \
+    -validity 365 \
+    -storepass "$KEYSTORE_PASSWORD" \
+    -keypass "$KEYSTORE_PASSWORD" \
+    -dname "CN=localhost, OU=Dev, O=SecureFileServer, L=Local, ST=Local, C=CA"
 
+echo "Keystore generated successfully."
