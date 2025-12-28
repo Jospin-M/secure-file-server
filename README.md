@@ -1,61 +1,86 @@
-# secure-file-server
+# Secure File Server
 
-## Certificate Generation
+A lightweight, TLS-encrypted HTTPS file server built in Java for secure file serving and API protection.
 
-This project requires TLS certificates to run the HTTPS server. 
-For development, you can generate self-signed certificates.
+---
 
-**Note**: Self-signed certificates are only suitable for development. Browsers will show security warnings.
+## Overview
+
+The Secure File Server is a Java-based HTTPS server that demonstrates secure file serving over TLS with token-based authentication. It serves as both a learning resource for secure server implementation and a foundation for custom secure file-serving applications.
+
+---
+
+## Features
+
+- **TLS/SSL Encryption**: All communication encrypted using self-signed certificates
+- **Token-Based Authentication**: API protection via configurable access tokens
+- **Environment-Based Configuration**: Secure credential management using `.env` files
+
+---
+
+## Use Cases
+
+- Secure file serving in local or test environments
+- Learning Java-based TLS/SSL server implementation
+- Understanding keystore, certificate, and SSLContext integration
+- Prototyping secure APIs with token-based authentication
+
+---
 
 ## Prerequisites
-- OpenSSL installed on your system
-- Basic understanding of TLS/SSL certificates
 
-### Generate Certificate
+- JDK 17 or higher
+- Maven 3.6+
+- Bash shell
 
-1. **Generate a private key**
-   ```bash
-   openssl genrsa -out certs/server.key 2048
-   ```
+---
 
-2. **Create a Certificate Signing Request (CSR)**
-   ```bash
-   openssl req -new -key certs/server.key -out certs/server.csr \
-     -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
-   ```
+## Quick Start
 
-3. **Generate a self-signed certificate**
-   ```bash
-   openssl x509 -req -in certs/server.csr -signkey certs/server.key \
-     -out certs/server.crt -days 365
-   ```
-
-4. **Create a PKCS#12 keystore for Java**
-   ```bash
-   openssl pkcs12 -export \
-     -in certs/server.crt \
-     -inkey certs/server.key \
-     -out certs/keystore.p12 \
-     -name myserver
-   ```
-   
-   You'll be prompted to set an export password. **Save this password in a .env file in the following format: key_store_password=[yourpassword] **.
-
-## Verification
-
+### 1. Clone the Repository
 ```bash
-# Check certificate details
-openssl x509 -in certs/server.crt -text -noout
-
-# Verify certificate matches private key
-openssl x509 -noout -modulus -in certs/server.crt | openssl md5
-openssl rsa -noout -modulus -in certs/server.key | openssl md5
-# The MD5 hashes should match
+git clone 
+cd secure-file-server
 ```
 
-### Test HTTPS Connection
+### 2. Generate TLS Certificates
 
+Run the certificate generation script:
 ```bash
-# Test with OpenSSL
-openssl s_client -connect localhost:8443 -servername localhost
+./generate-cert
 ```
+
+This creates a PKCS#12 keystore (`keystore.p12`) in the `certs/` directory containing:
+- A self-signed TLS certificate
+- The associated private key
+
+### 3. Configure Environment Variables
+
+Create a `.env` file in the project root:
+```bash
+key_store_password=your_secure_password_here
+```
+
+### 4. Start the Server
+```bash
+./run-server.sh
+```
+
+The server will start and listen for HTTPS requests on the configured port.
+
+---
+
+## Authentication
+
+### Token-Based Access Control
+
+All API endpoints require valid authentication tokens. To grant access:
+
+1. Add token-user pairs to `config/tokens.txt`
+2. Format: `access_token|user_id` (one pair per line)
+3. Include the token in client requests (e.g curl -k -H "Authorization: Bearer [token]" https://localhost:8443/download/file.txt"
+
+
+Requests without valid tokens will be rejected with a `401 Unauthorized` response.
+
+---
