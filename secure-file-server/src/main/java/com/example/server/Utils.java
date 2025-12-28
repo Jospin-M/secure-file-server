@@ -1,4 +1,4 @@
-package com.example;
+package com.example.server;
 
 import java.io.IOException;
 import java.io.OutputStream;

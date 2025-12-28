@@ -2,7 +2,7 @@ package com.example.security;
 
 import java.io.IOException;
 
-import com.example.Utils;
+import com.example.server.Utils;
 import com.sun.net.httpserver.HttpExchange;
 
 /** A security component responsible for authenticating HTTP requests using
