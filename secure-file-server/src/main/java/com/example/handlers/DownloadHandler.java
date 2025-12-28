@@ -15,6 +15,14 @@ import java.nio.file.Files;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/** An HTTP handler responsible for processing authenticated file download requests.
+ *
+ * <p>This handler serves files from the local {@code uploads/} directory after
+ * validating the request method, authenticating the client, and enforcing
+ * per-user ownership constraints. Requested file paths are strictly validated
+ * to prevent path traversal and unauthorized access. On a successful request, the handler streams the requested file directly
+ * to the client using a binary response. </p>
+ */
 public class DownloadHandler implements HttpHandler {
     private HttpExchange exchange;
     private final Path UPLOAD_ROOT = Paths.get("uploads");

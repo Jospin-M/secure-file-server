@@ -72,6 +72,20 @@ public class Utils {
         }
     }
 
+    /**
+     * Validates that an incoming HTTP request uses the expected HTTP method.
+     *
+     * <p>If the request method does not match the expected method, this utility
+     * sends a {@code 405 Method Not Allowed} JSON response and sets the
+     * {@code Allow} response header to indicate which method is permitted for
+     * the endpoint, in accordance with HTTP semantics.</p>
+     * 
+     * @param exchange the HTTP exchange containing the client request
+     * @param expectedMethod the only HTTP method allowed for the endpoint
+     * @return {@code true} if the request method is valid;
+     *         {@code false} otherwise
+     * @throws IOException if an I/O error occurs while sending the error response
+     */
     public static boolean isHTTPMethodValid(HttpExchange exchange, String expectedMethod) throws IOException {
         if(!exchange.getRequestMethod().equalsIgnoreCase(expectedMethod)) {
             // indicate which HTTP headers are allowed for this endpoint
