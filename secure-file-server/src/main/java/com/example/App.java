@@ -5,12 +5,13 @@ import java.nio.file.Paths;
 
 import javax.net.ssl.SSLContext;
 import java.net.InetSocketAddress;
-
 import com.sun.net.httpserver.HttpsServer;
+
+import com.example.security.TokenStore;
 import com.example.handlers.UploadHandler;
 import com.example.security.Authenticator;
 import com.example.security.OwnershipStore;
-import com.example.security.TokenStore;
+import com.example.server.ServerInitializer;
 import com.example.handlers.DownloadHandler;
 
 public class App {

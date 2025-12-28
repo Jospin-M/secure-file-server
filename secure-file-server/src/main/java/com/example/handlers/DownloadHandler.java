@@ -3,7 +3,7 @@ package com.example.handlers;
 import java.io.IOException;
 
 import java.net.URI;
-import com.example.Utils;
+import com.example.server.Utils;
 import com.example.security.Authenticator;
 import com.example.security.OwnershipStore;
 import com.sun.net.httpserver.HttpHandler;
